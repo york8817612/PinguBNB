@@ -1,0 +1,5 @@
+/.vs
+/Pingu.Server/obj
+/Pingu.Server/bin
+/Pingu.Server/*.user
+/Pingu.Server/Properties/PublishProfiles
