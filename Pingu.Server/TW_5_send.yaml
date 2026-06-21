@@ -13,8 +13,10 @@ ChannelsGameState: 14
 EnterLobbyStage: 15
 EnterShopStage: 18
 ResEstimateRTT: 20
+ChatMessage: 25
 Whisper: 27
 SystemMsg: 30
+MyInfoResult: 64
 UserSimpleInfo: 70
 CreateSessionResult: 80
 JoinSessionResult: 81

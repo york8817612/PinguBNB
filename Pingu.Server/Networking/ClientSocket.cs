@@ -1,71 +1,111 @@
+using System.Buffers;
 using System.Net.Sockets;
 using Pingu.Models;
 
 namespace Pingu.Networking;
 
-public class ClientSocket
+public class ClientSocket : IDisposable
 {
+    private const int RecvBufferSize = 4096;
+    private static readonly List<ClientSocket> _allClients = [];
+    private static readonly Lock _allClientsLock = new();
+
     public TcpClient TcpClient { get; }
     public NetworkStream Stream { get; }
     public List<User> Users { get; } = [];
-    public int SendSeq { get; set; } = 40;
-    public int RecvSeq { get; set; } = 40;
+    public int SendSeq { get; private set; } = 40;
+    public int RecvSeq { get; private set; } = 40;
     public int CipherDegree { get; set; } = 0;
+    private bool _disposed;
 
     public ClientSocket(TcpClient tcpClient)
     {
         TcpClient = tcpClient;
         Stream = tcpClient.GetStream();
+        lock (_allClientsLock) _allClients.Add(this);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        lock (_allClientsLock) _allClients.Remove(this);
+        TcpClient.Dispose();
+        GC.SuppressFinalize(this);
+    }
+
+    public void BroadcastPacket(IPacket packet)
+    {
+        lock (_allClientsLock)
+        {
+            foreach (var client in _allClients)
+                _ = client.SendPacketAsync(packet);
+        }
+    }
+
+    public void BroadcastPackets(params IPacket[] packets)
+    {
+        lock (_allClientsLock)
+        {
+            foreach (var client in _allClients)
+                _ = client.SendPacketsAsync(packets);
+        }
     }
 
     public async Task RunAsync()
     {
         try
         {
-            // Send initial ConnEstablished
             await SendPacketAsync(new Packets.ConnEstablished());
 
-            var recvBuf = new byte[4096];
+            var recvBuf = ArrayPool<byte>.Shared.Rent(RecvBufferSize);
             var buffer = new MemoryStream();
 
-            while (true)
+            try
             {
-                int bytesRead;
-                try
+                while (true)
                 {
-                    bytesRead = await Stream.ReadAsync(recvBuf);
-                }
-                catch
-                {
-                    break;
-                }
-
-                if (bytesRead == 0) break;
-
-                buffer.Write(recvBuf, 0, bytesRead);
-
-                while (TryDecodePacket(buffer, out var payload, out var opcode))
-                {
-                    var handler = opcode >= 0 && opcode < OpcodeManager.HandlerArray.Length
-                        ? OpcodeManager.HandlerArray[opcode]
-                        : null;
-
-                    if (ServerConfig.DebugMode || handler == null)
-                        LogPacket(opcode, handler, payload);
-
-                    if (handler != null)
+                    int bytesRead;
+                    try
                     {
-                        try
+                        bytesRead = await Stream.ReadAsync(recvBuf.AsMemory(0, RecvBufferSize));
+                    }
+                    catch
+                    {
+                        break;
+                    }
+
+                    if (bytesRead == 0) break;
+
+                    buffer.Write(recvBuf, 0, bytesRead);
+
+                    while (TryDecodePacket(buffer, out var payload, out var opcode))
+                    {
+                        var handler = (uint)opcode < (uint)OpcodeManager.HandlerArray.Length
+                            ? OpcodeManager.HandlerArray[opcode]
+                            : null;
+
+                        if (ServerConfig.DebugMode || handler == null)
+                            LogPacket(opcode, handler, payload);
+
+                        if (handler != null)
                         {
-                            handler.Handle(this, payload);
-                        }
-                        catch (Exception ex)
-                        {
-                            var name = OpcodeManager.RecvOps.GetValueOrDefault(opcode, "UNKNOWN");
-                            Console.Error.WriteLine($"業務邏輯錯誤 [{name}] | {ex.Message}");
+                            try
+                            {
+                                handler.Handle(this, payload);
+                            }
+                            catch (Exception ex)
+                            {
+                                var name = OpcodeManager.RecvOps.GetValueOrDefault(opcode, "UNKNOWN");
+                                Console.Error.WriteLine($"業務邏輯錯誤 [{name}] | {ex.Message}");
+                            }
                         }
                     }
                 }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(recvBuf);
             }
         }
         catch (Exception ex)
@@ -75,11 +115,11 @@ public class ClientSocket
         }
         finally
         {
-            TcpClient.Close();
+            Dispose();
         }
     }
 
-    private bool TryDecodePacket(MemoryStream buffer, out byte[] payload, out int opcode)
+    private bool TryDecodePacket(MemoryStream buffer, out ReadOnlySpan<byte> payload, out int opcode)
     {
         payload = [];
         opcode = -1;
@@ -89,53 +129,44 @@ public class ClientSocket
 
         if (len < Codec.MinimumLen) return false;
 
-        // Check header code
         int expectedHeader = (Codec.HeaderType + Codec.HeaderCodeModifier) ^ (Codec.HeaderCodeRcvBase + RecvSeq);
-        int recvHeader = buf[pos];
-        if (recvHeader != (byte)expectedHeader)
+        if (buf[pos] != (byte)expectedHeader)
         {
             buffer.SetLength(0);
             return false;
         }
         pos++;
 
-        // Read payload length (always Decode2 for header portion)
         int payloadLen = (buf[pos + 1] | (buf[pos] << 8)) ^ 0xA569;
         pos += 2;
 
         if (len - pos < payloadLen + Codec.CrcLen) return false;
 
-        // Extract payload
-        payload = new byte[payloadLen];
-        Array.Copy(buf, pos, payload, 0, payloadLen);
-        pos += payloadLen;
+        var payloadSpan = buf.AsSpan(pos, payloadLen);
+        SimpleStream.Decrypt3(payloadSpan, RecvSeq);
 
-        // Decrypt payload
-        SimpleStream.Decrypt3(payload, RecvSeq);
-
-        // Verify CRC
         bool crcOk = Codec.CipherDegreeInit switch
         {
-            1 => (buf[pos + 3] | (buf[pos + 2] << 8) | (buf[pos + 1] << 16) | (buf[pos] << 24)) == CRC32.Update(RecvSeq, payload),
-            2 or 3 => buf[pos] == (byte)CRC8.Update(RecvSeq, payload),
+            1 => (buf[pos + payloadLen + 3] | (buf[pos + payloadLen + 2] << 8) | (buf[pos + payloadLen + 1] << 16) | (buf[pos + payloadLen] << 24)) == CRC32.Update(RecvSeq, payloadSpan),
+            2 or 3 => buf[pos + payloadLen] == (byte)CRC8.Update(RecvSeq, payloadSpan),
             _ => true
         };
 
         if (!crcOk)
         {
-            Console.WriteLine($"CRC 錯誤，斷開連接");
+            Console.WriteLine("CRC 錯誤，斷開連接");
             buffer.SetLength(0);
             return false;
         }
 
-        pos += Codec.CrcLen;
+        pos += payloadLen + Codec.CrcLen;
 
-        // Get opcode from decrypted payload
         int payloadOff = 0;
-        opcode = Codec.CipherDegreeInit == 3 ? payload.Decode2(ref payloadOff) : payload.Decode1(ref payloadOff);
+        opcode = Codec.CipherDegreeInit == 3
+            ? payloadSpan.Decode2(ref payloadOff)
+            : payloadSpan.Decode1(ref payloadOff);
 
-        // Remove consumed byte
-        payload = payload[payloadOff..];
+        payload = payloadSpan.Slice(payloadOff);
 
         RecvSeq += Codec.PacketRcvSeqDelta;
         return true;
@@ -146,22 +177,13 @@ public class ClientSocket
         var opcode = OpcodeManager.GetSendOp(packet.GetType());
         if (opcode < 0) return;
 
-        using var ms = new MemoryStream();
-
         var spb = new SendPacketBase(CipherDegree);
         if (CipherDegree == 3)
-        {
             spb.Encode2(opcode);
-        }
         else
-        {
             spb.Encode1(opcode);
-        }
         packet.Encode(spb);
         var payload = spb.Stream.ToArray();
-
-        ms.SetLength(payload.Length);
-        ms.Position = payload.Length;
 
         if (ServerConfig.DebugMode)
         {
@@ -169,7 +191,6 @@ public class ClientSocket
             Console.WriteLine($"[{name}] {opcode} | 0x{opcode:X} | Sending {BitConverter.ToString(payload).Replace("-", " ")}");
         }
 
-        // Write CRC
         int crc = CipherDegree switch
         {
             1 => CRC32.Update(SendSeq, payload),
@@ -177,77 +198,77 @@ public class ClientSocket
             _ => 0
         };
 
-        switch (CipherDegree)
-        {
-            case 1:
-                ms.WriteByte((byte)(crc >> 24));
-                ms.WriteByte((byte)(crc >> 16));
-                ms.WriteByte((byte)(crc >> 8));
-                ms.WriteByte((byte)crc);
-                break;
-            case 2 or 3:
-                ms.WriteByte((byte)crc);
-                break;
-        }
-        ms.Position = 0;
-        var tmp = ms.ToArray();
-        spb.Stream.Position = 0;
-        spb.Stream.CopyTo(ms);
-
-        var finalPayload = ms.ToArray();
-
-        // Write header
         int headerCode = (Codec.HeaderType + Codec.HeaderCodeModifier) ^ (Codec.HeaderCodeSndBase + SendSeq);
-        int payloadLen = payload.Length;
-        var header = new MemoryStream();
-        header.WriteByte((byte)headerCode);
+        int crcLen = CipherDegree switch { 1 => 4, 2 or 3 => 1, _ => 0 };
 
-        // Write Encrypt Payload
-        byte[] result;
         if (CipherDegree is >= 1 and <= 3)
         {
-            if (CipherDegree == 3)
-            {
-                header.WriteByte(0);
-                var encLen = payloadLen ^ unchecked((int)0x96CA5395);
-                header.WriteByte((byte)(encLen >> 24));
-                header.WriteByte((byte)(encLen >> 16));
-                header.WriteByte((byte)(encLen >> 8));
-                header.WriteByte((byte)encLen);
-            }
-            else
-            {
-                var encLen = payloadLen ^ 0xA569;
-                header.WriteByte((byte)(encLen >> 8));
-                header.WriteByte((byte)encLen);
-            }
-            // Encrypt payload
-            SimpleStream.Encrypt3(finalPayload.AsSpan(), SendSeq, 0, payloadLen);
+            int headerLen = CipherDegree == 3 ? 6 : 3;
+            int totalLen = headerLen + payload.Length + crcLen;
 
-            result = new byte[header.Length + finalPayload.Length];
-            Span<byte> span = result;
-            header.ToArray().CopyTo(span);
-            finalPayload.CopyTo(span[(int)header.Length..]);
+            var result = ArrayPool<byte>.Shared.Rent(totalLen);
+            try
+            {
+                result[0] = (byte)headerCode;
 
-            Stream.Write(span);
+                if (CipherDegree == 3)
+                {
+                    result[1] = 0;
+                    var encLen = payload.Length ^ unchecked((int)0x96CA5395);
+                    result[2] = (byte)(encLen >> 24);
+                    result[3] = (byte)(encLen >> 16);
+                    result[4] = (byte)(encLen >> 8);
+                    result[5] = (byte)encLen;
+                }
+                else
+                {
+                    var encLen = payload.Length ^ 0xA569;
+                    result[1] = (byte)(encLen >> 8);
+                    result[2] = (byte)encLen;
+                }
+
+                payload.AsSpan().CopyTo(result.AsSpan(headerLen));
+                SimpleStream.Encrypt3(result.AsSpan(headerLen, payload.Length), SendSeq, 0, payload.Length);
+
+                int crcPos = headerLen + payload.Length;
+                switch (CipherDegree)
+                {
+                    case 1:
+                        result[crcPos] = (byte)(crc >> 24);
+                        result[crcPos + 1] = (byte)(crc >> 16);
+                        result[crcPos + 2] = (byte)(crc >> 8);
+                        result[crcPos + 3] = (byte)crc;
+                        break;
+                    case 2 or 3:
+                        result[crcPos] = (byte)crc;
+                        break;
+                }
+
+                Stream.Write(result, 0, totalLen);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(result);
+            }
         }
-        else // Write Raw Payload
+        else
         {
-            header.WriteByte((byte)(payloadLen >> 8));
-            header.WriteByte((byte)payloadLen);
-            CipherDegree = Codec.CipherDegreeInit;
-
-            result = new byte[header.Length + payload.Length];
-            Span<byte> span = result;
-            header.ToArray().CopyTo(span);
-            payload.CopyTo(span[(int)header.Length..]);
-
-            Stream.Write(span);
+            int totalLen = 3 + payload.Length;
+            var result = ArrayPool<byte>.Shared.Rent(totalLen);
+            try
+            {
+                result[0] = (byte)headerCode;
+                result[1] = (byte)(payload.Length >> 8);
+                result[2] = (byte)payload.Length;
+                payload.AsSpan().CopyTo(result.AsSpan(3));
+                CipherDegree = Codec.CipherDegreeInit;
+                Stream.Write(result, 0, totalLen);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(result);
+            }
         }
-
-        //var headerBytes = header.ToArray();
-        //await Stream.WriteAsync(headerBytes);
-        //await Stream.WriteAsync(payload);
 
         SendSeq += Codec.PacketSndSeqDelta;
     }
@@ -258,12 +279,12 @@ public class ClientSocket
             await SendPacketAsync(p);
     }
 
-    private void LogPacket(int opcode, IPacketHandler? handler, byte[] payload)
+    private void LogPacket(int opcode, IPacketHandler? handler, ReadOnlySpan<byte> payload)
     {
         var name = OpcodeManager.RecvOps.GetValueOrDefault(opcode, "UNKNOWN");
         var status = handler != null ? "接收" : "找不到 Handler";
         Console.WriteLine($"[{name}] {opcode} | 0x{opcode:X} | {status}");
         if (payload.Length is > 0 and <= 100)
-            Console.WriteLine(BitConverter.ToString(payload).Replace("-", " "));
+            Console.WriteLine(BitConverter.ToString(payload.ToArray()).Replace("-", " "));
     }
 }
