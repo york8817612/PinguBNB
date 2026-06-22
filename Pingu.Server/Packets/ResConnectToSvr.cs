@@ -11,7 +11,7 @@ public class ResConnectToSvr(int res, int channelId) : IPacket
         {
             buf.Encode1(channelId);
             buf.Encode4(0);
-            buf.Encode4(0x7F000001);
+            buf.Encode4(Codec.LoopbackIp);
             buf.Encode2(channelId != 11 ? 4848 : 4849);
         }
     }

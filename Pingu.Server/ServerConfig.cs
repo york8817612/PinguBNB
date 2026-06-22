@@ -37,7 +37,7 @@ public static class ServerConfig
         if (root.Children.ContainsKey(new YamlScalarNode(verKey)))
             Ver = int.Parse(((YamlScalarNode)root[verKey]!).Value!);
         else
-            throw new Exception($"找不到 {localeStr} 的版本號 (XX_VER)");
+            throw new Exception($"Missing version config for {localeStr} (XX_VER)");
 
         ACP = Locale switch
         {

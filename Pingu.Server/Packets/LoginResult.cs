@@ -3,20 +3,39 @@ using Pingu.Models;
 
 namespace Pingu.Packets;
 
-public class LoginResult : IPacket
+public class LoginResult(List<User> users) : IPacket
 {
-    private readonly List<User> _users;
-    public LoginResult(List<User> users) => _users = users;
-
     public void Encode(SendPacketBase buf)
     {
+        if (ServerConfig.IsJP)
+        {
+            buf.Encode1(0);
+            buf.Encode2(1);
+            buf.EncodeStr("");
+            buf.Encode1(0);
+            buf.Encode1(users.Count);
+
+            foreach (var user in users)
+            {
+                buf.Encode4(user.Id);
+                buf.EncodeStr(user.Name);
+                buf.Encode1(0);
+                buf.EncodeStr(user.Name);
+                buf.Encode4(user.Level);
+            }
+
+            buf.Encode1(0);
+            buf.Encode1(0);
+            return;
+        }
+
         buf.Encode1(0);
         if (ServerConfig.IsCN) buf.Encode1(0);
         buf.Encode2(1);
         buf.EncodeStr("");
 
-        buf.Encode1(_users.Count);
-        foreach (var user in _users)
+        buf.Encode1(users.Count);
+        foreach (var user in users)
         {
             buf.Encode4(user.Id);
             buf.EncodeStr(user.Name);
@@ -38,43 +57,9 @@ public class LoginResult : IPacket
 
             buf.Encode4(0);
 
-            if (ServerConfig.IsTW)
-            {
-                buf.Encode1(0);
-            }
-
-            if (ServerConfig.IsCN)
-            {
-                buf.Encode1(0);
-            }
+            if (ServerConfig.IsTW) buf.Encode1(0);
+            if (ServerConfig.IsCN) buf.Encode1(0);
         }
         buf.EncodeStr("");
-    }
-}
-
-public class LoginResultJP : IPacket
-{
-    private readonly List<User> _users;
-    public LoginResultJP(List<User> users) => _users = users;
-
-    public void Encode(SendPacketBase buf)
-    {
-        buf.Encode1(0);
-        buf.Encode2(1);
-        buf.EncodeStr("");
-        buf.Encode1(0);
-        buf.Encode1(_users.Count);
-
-        foreach (var user in _users)
-        {
-            buf.Encode4(user.Id);
-            buf.EncodeStr(user.Name);
-            buf.Encode1(0);
-            buf.EncodeStr(user.Name);
-            buf.Encode4(user.Level);
-        }
-
-        buf.Encode1(0);
-        buf.Encode1(0);
     }
 }

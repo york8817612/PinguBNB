@@ -15,7 +15,7 @@ public class EatItemReq : IPacketHandler
         if (ServerConfig.IsJP)
         {
             int v4 = data.Decode1();
-            Room.Broadcast(new EatItemResultJP(slotId, itemId, itemType, v4));
+            Room.Broadcast(new EatItemResult(slotId, itemId, itemType, v4));
         }
         else
         {

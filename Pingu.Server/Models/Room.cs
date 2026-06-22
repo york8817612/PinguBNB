@@ -106,6 +106,29 @@ public static class Room
         }
     }
 
+    public static void InitSlots(int userCount, IReadOnlyList<User> users, bool fillAI = false)
+    {
+        for (int i = 0; i < userCount; i++)
+        {
+            var slot = Slots[i];
+            slot.User = users[i];
+            slot.State = SlotFlags.Chief;
+            slot.Bomber = 5;
+            slot.Color = (byte)(fillAI ? 0 : i);
+        }
+
+        if (fillAI)
+        {
+            for (int i = 0; i < 6 - userCount; i++)
+            {
+                var slot = Slots[userCount + i];
+                slot.Bomber = 5;
+                slot.Color = 7;
+                slot.IsAI = true;
+            }
+        }
+    }
+
     public static void EndGame()
     {
         lock (_lock)

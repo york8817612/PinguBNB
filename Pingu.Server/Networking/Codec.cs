@@ -2,6 +2,7 @@ namespace Pingu.Networking;
 
 public static class Codec
 {
+    public const int LoopbackIp = 0x7F000001;
     public static int CipherDegreeInit
     {
         get

@@ -97,7 +97,7 @@ public class ClientSocket : IDisposable
                             catch (Exception ex)
                             {
                                 var name = OpcodeManager.RecvOps.GetValueOrDefault(opcode, "UNKNOWN");
-                                Console.Error.WriteLine($"業務邏輯錯誤 [{name}] | {ex.Message}");
+                                Console.Error.WriteLine($"Handler error [{name}] | {ex.Message}");
                             }
                         }
                     }
@@ -137,8 +137,19 @@ public class ClientSocket : IDisposable
         }
         pos++;
 
-        int payloadLen = (buf[pos + 1] | (buf[pos] << 8)) ^ 0xA569;
-        pos += 2;
+        int payloadLen;
+        if (Codec.CipherDegreeInit == 3)
+        {
+            pos++; // skip reserved zero byte (CipherDegree=3 protocol)
+            payloadLen = (buf[pos] << 24) | (buf[pos + 1] << 16) | (buf[pos + 2] << 8) | buf[pos + 3];
+            payloadLen ^= unchecked((int)0x96CA5395);
+            pos += 4;
+        }
+        else
+        {
+            payloadLen = (buf[pos + 1] | (buf[pos] << 8)) ^ 0xA569;
+            pos += 2;
+        }
 
         if (len - pos < payloadLen + Codec.CrcLen) return false;
 
@@ -154,7 +165,7 @@ public class ClientSocket : IDisposable
 
         if (!crcOk)
         {
-            Console.WriteLine("CRC 錯誤，斷開連接");
+            Console.WriteLine("CRC mismatch, disconnecting");
             buffer.SetLength(0);
             return false;
         }
@@ -284,7 +295,7 @@ public class ClientSocket : IDisposable
     private void LogPacket(int opcode, IPacketHandler? handler, ReadOnlySpan<byte> payload)
     {
         var name = OpcodeManager.RecvOps.GetValueOrDefault(opcode, "UNKNOWN");
-        var status = handler != null ? "接收" : "找不到 Handler";
+        var status = handler != null ? "Received" : "Handler not found";
         Console.WriteLine($"[{name}] {opcode} | 0x{opcode:X} | {status}");
         if (payload.Length is > 0 and <= 100)
             Console.WriteLine(BitConverter.ToString(payload.ToArray()).Replace("-", " "));

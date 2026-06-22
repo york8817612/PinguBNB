@@ -21,10 +21,7 @@ public class LoginReq : IPacketHandler
 
             int unk = data.Decode4();
 
-            if (!ServerConfig.IsJP)
-                _ = client.SendPacketAsync(new LoginResult(client.Users));
-            else
-                _ = client.SendPacketAsync(new LoginResultJP(client.Users));
+            _ = client.SendPacketAsync(new LoginResult(client.Users));
         }
     }
 }

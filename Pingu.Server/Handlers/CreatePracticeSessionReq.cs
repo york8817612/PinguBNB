@@ -10,23 +10,7 @@ public class CreatePracticeSessionReq : IPacketHandler
     {
         int userCount = data.Decode1();
 
-        for (int i = 0; i < userCount; i++)
-        {
-            data.Decode1();
-            var slot = Room.Slots[i];
-            slot.User = client.Users[i];
-            slot.State = SlotFlags.Chief;
-            slot.Bomber = 5;
-            slot.Color = 0;
-        }
-
-        for (int i = 0; i < 6 - userCount; i++)
-        {
-            var slot = Room.Slots[userCount + i];
-            slot.Bomber = 5;
-            slot.Color = 7;
-            slot.IsAI = true;
-        }
+        Room.InitSlots(userCount, client.Users, fillAI: true);
 
         _ = client.SendPacketAsync(new CreatePracticeSessionResult());
         _ = Room.EncodeSlots(client);

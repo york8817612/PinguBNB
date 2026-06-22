@@ -9,7 +9,7 @@ public class UnkResult : IPacket
         buf.Encode1(1);
         buf.Encode1(0);
         buf.Encode4(0);
-        buf.Encode4(0x7F000001);
+        buf.Encode4(Codec.LoopbackIp);
         buf.Encode2(3838);
     }
 }

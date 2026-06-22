@@ -46,7 +46,7 @@ public static class OpcodeManager
         }
 
         RecvOps = recvYaml.ToDictionary(kv => kv.Value, kv => kv.Key);
-        Console.WriteLine($"初始化完成: 綁定 {HandlerArray.Count(h => h != null)} 個 Handler, 註冊 {SendOpCache.Count} 個發送包");
+        Console.WriteLine($"Initialized: {HandlerArray.Count(h => h != null)} handlers bound, {SendOpCache.Count} send packets registered");
     }
 
     public static int GetSendOp(Type clazz) => SendOpCache.GetValueOrDefault(clazz, -1);

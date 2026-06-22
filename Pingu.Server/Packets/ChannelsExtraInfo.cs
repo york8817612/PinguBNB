@@ -14,14 +14,14 @@ public class ChannelsExtraInfo : IPacket
         if (ServerConfig.IsTW || ServerConfig.IsCN)
         {
             buf.Encode1(1);
-            buf.Encode4(0x7F000001);
+            buf.Encode4(Codec.LoopbackIp);
             buf.Encode2(9898);
 
             buf.Encode1(1);
-            buf.Encode4(0x7F000001);
+            buf.Encode4(Codec.LoopbackIp);
 
             buf.Encode1(1);
-            buf.Encode4(0x7F000001);
+            buf.Encode4(Codec.LoopbackIp);
 
             buf.Encode2(0);
 
@@ -30,14 +30,14 @@ public class ChannelsExtraInfo : IPacket
             if (ServerConfig.IsTW)
             {
                 buf.Encode1(1);
-                buf.Encode4(0x7F000001);
+                buf.Encode4(Codec.LoopbackIp);
                 buf.Encode2(7360);
             }
         }
         else if (ServerConfig.IsJP)
         {
             buf.Encode1(1);
-            buf.Encode4(0x7F000001);
+            buf.Encode4(Codec.LoopbackIp);
             buf.Encode1(0);
             buf.Encode2(15);
         }

@@ -2,13 +2,16 @@ namespace Pingu;
 
 public static class SimpleStream
 {
+    private const int StreamKey = unchecked((int)0x53351D9C);
+    private const int StreamKeyStep = unchecked((int)0x63CAACE3);
+
     public static void Encrypt3(Span<byte> buf, int key, int offset = 0, int? size = null)
     {
         int len = size ?? buf.Length - offset;
         int blockCount = len >> 2;
         int remaining = len & 3;
 
-        int mk = key ^ unchecked((int)0x53351D9C);
+        int mk = key ^ StreamKey;
 
         if (blockCount > 0)
         {
@@ -17,7 +20,7 @@ public static class SimpleStream
 
             for (int i = 0; i < blockCount - 1; i++)
             {
-                mk -= unchecked((int)0x63CAACE3);
+                mk -= StreamKeyStep;
                 int idx = offset + ((i + 1) * 4);
                 int cb = BitConverter.ToInt32(buf.Slice(idx));
                 BitConverter.TryWriteBytes(buf.Slice(idx), mk ^ cb ^ pp);
@@ -43,7 +46,7 @@ public static class SimpleStream
         int blockCount = len >> 2;
         int remaining = len & 3;
 
-        int mk = key ^ unchecked((int)0x53351D9C);
+        int mk = key ^ StreamKey;
 
         if (blockCount > 0)
         {
@@ -53,7 +56,7 @@ public static class SimpleStream
 
             for (int i = 0; i < blockCount - 1; i++)
             {
-                mk -= unchecked((int)0x63CAACE3);
+                mk -= StreamKeyStep;
                 int idx = offset + ((i + 1) * 4);
                 int cc = BitConverter.ToInt32(buf.Slice(idx));
                 int cp = mk ^ cc ^ pp;
