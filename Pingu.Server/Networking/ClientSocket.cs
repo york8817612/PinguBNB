@@ -86,13 +86,13 @@ public class ClientSocket : IDisposable
                             : null;
 
                         if (ServerConfig.DebugMode || handler == null)
-                            LogPacket(opcode, handler, payload);
+                            LogPacket(opcode, handler, payload.AsSpan());
 
                         if (handler != null)
                         {
                             try
                             {
-                                handler.Handle(this, payload);
+                                handler.Handle(this, payload.AsSpan());
                             }
                             catch (Exception ex)
                             {
@@ -119,7 +119,7 @@ public class ClientSocket : IDisposable
         }
     }
 
-    private bool TryDecodePacket(MemoryStream buffer, out ReadOnlySpan<byte> payload, out int opcode)
+    private bool TryDecodePacket(MemoryStream buffer, out byte[] payload, out int opcode)
     {
         payload = [];
         opcode = -1;
@@ -166,9 +166,14 @@ public class ClientSocket : IDisposable
             ? payloadSpan.Decode2(ref payloadOff)
             : payloadSpan.Decode1(ref payloadOff);
 
-        payload = payloadSpan.Slice(payloadOff);
+        payload = payloadSpan.Slice(payloadOff).ToArray();
 
         RecvSeq += Codec.PacketRcvSeqDelta;
+
+        var remaining = buffer.Length - pos;
+        if (remaining > 0)
+            buffer.GetBuffer().AsSpan(pos, (int)remaining).CopyTo(buffer.GetBuffer());
+        buffer.SetLength(remaining);
         return true;
     }
 
