@@ -8,19 +8,18 @@ public class LoginReq : IPacketHandler
 {
     public void Handle(ClientSocket client, ReadOnlySpan<byte> data)
     {
-        int off = 0;
-        int userCount = data.Decode1(ref off);
+        int userCount = data.Decode1();
         if (userCount is >= 1 and <= 2)
         {
             for (int i = 0; i < userCount; i++)
             {
-                var name = data.DecodeEncryptedStr(ref off, 0x11223344);
-                var pw = data.DecodeEncryptedStr(ref off, 0x44332211);
+                var name = data.DecodeEncryptedStr(0x11223344);
+                var pw = data.DecodeEncryptedStr(0x44332211);
                 var userId = Interlocked.Increment(ref GlobalState.NextUserId);
                 client.Users.Add(new User(client, userId, name));
             }
 
-            int unk = data.Decode4(ref off);
+            int unk = data.Decode4();
 
             if (!ServerConfig.IsJP)
                 _ = client.SendPacketAsync(new LoginResult(client.Users));

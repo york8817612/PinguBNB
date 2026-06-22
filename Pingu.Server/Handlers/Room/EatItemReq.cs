@@ -8,14 +8,13 @@ public class EatItemReq : IPacketHandler
 {
     public void Handle(ClientSocket client, ReadOnlySpan<byte> data)
     {
-        int off = 0;
-        int slotId = data.Decode1(ref off);
-        int itemId = data.Decode1(ref off);
-        int itemType = data.Decode1(ref off);
+        int slotId = data.Decode1();
+        int itemId = data.Decode1();
+        int itemType = data.Decode1();
 
         if (ServerConfig.IsJP)
         {
-            int v4 = data.Decode1(ref off);
+            int v4 = data.Decode1();
             Room.Broadcast(new EatItemResultJP(slotId, itemId, itemType, v4));
         }
         else

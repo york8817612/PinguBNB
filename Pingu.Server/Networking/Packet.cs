@@ -14,7 +14,7 @@ public interface IPacketHandler
 }
 
 /// <summary>
-/// BNB 使用大端序
+/// BNB 嚙誕用大嚙豎改蕭
 /// </summary>
 public class SendPacketBase
 {
@@ -84,52 +84,47 @@ public class SendPacketBase
 
 public static class ReceiveExtensions
 {
-    public static byte ReadByte(this ReadOnlySpan<byte> data, ref int offset)
-        => data[offset++];
-
-    public static int Decode1(this ReadOnlySpan<byte> data, ref int offset)
+    public static int Decode1(ref this ReadOnlySpan<byte> data)
     {
-        if (Codec.CipherDegreeInit is >= 1 and <= 3)
-            return data[offset++] ^ 0x5A;
-        return data[offset++];
-    }
-
-    public static int Decode2(this ReadOnlySpan<byte> data, ref int offset)
-    {
-        int val = data[offset + 1] | (data[offset] << 8);
-        offset += 2;
-        if (Codec.CipherDegreeInit is >= 1 and <= 3)
-            return val ^ 0xA569;
+        int val = Codec.CipherDegreeInit is >= 1 and <= 3
+            ? data[0] ^ 0x5A
+            : data[0];
+        data = data[1..];
         return val;
     }
 
-    public static int Decode4(this ReadOnlySpan<byte> data, ref int offset)
+    public static int Decode2(ref this ReadOnlySpan<byte> data)
     {
-        int val = data[offset + 3] | (data[offset + 2] << 8) | (data[offset + 1] << 16) | (data[offset] << 24);
-        offset += 4;
-        if (Codec.CipherDegreeInit is >= 1 and <= 3)
-            return val ^ unchecked((int)0x96CA5395);
-        return val;
+        int val = data[1] | (data[0] << 8);
+        data = data[2..];
+        return Codec.CipherDegreeInit is >= 1 and <= 3 ? val ^ 0xA569 : val;
     }
 
-    public static string DecodeStr(this ReadOnlySpan<byte> data, ref int offset)
+    public static int Decode4(ref this ReadOnlySpan<byte> data)
     {
-        int len = Codec.CipherDegreeInit == 3 ? data.Decode4(ref offset) : data.Decode2(ref offset);
-        var s = ServerConfig.ACP.GetString(data.Slice(offset, len));
-        offset += len;
+        int val = data[3] | (data[2] << 8) | (data[1] << 16) | (data[0] << 24);
+        data = data[4..];
+        return Codec.CipherDegreeInit is >= 1 and <= 3 ? val ^ unchecked((int)0x96CA5395) : val;
+    }
+
+    public static string DecodeStr(ref this ReadOnlySpan<byte> data)
+    {
+        int len = Codec.CipherDegreeInit == 3 ? data.Decode4() : data.Decode2();
+        var s = ServerConfig.ACP.GetString(data[..len]);
+        data = data[len..];
         return s;
     }
 
-    public static string DecodeEncryptedStr(this ReadOnlySpan<byte> data, ref int offset, int key)
+    public static string DecodeEncryptedStr(ref this ReadOnlySpan<byte> data, int key)
     {
-        int len = Codec.CipherDegreeInit == 3 ? data.Decode4(ref offset) : data.Decode2(ref offset);
+        int len = Codec.CipherDegreeInit == 3 ? data.Decode4() : data.Decode2();
         var segment = new byte[len];
-        data.Slice(offset, len).CopyTo(segment);
+        data[..len].CopyTo(segment);
         SimpleStream.Decrypt3(segment, key);
         var s = ServerConfig.ACP.GetString(segment);
         if (ServerConfig.DebugMode && ServerConfig.ShowDecValue)
             Console.WriteLine($"decryptString: {s}");
-        offset += len;
+        data = data[len..];
         return s;
     }
 }

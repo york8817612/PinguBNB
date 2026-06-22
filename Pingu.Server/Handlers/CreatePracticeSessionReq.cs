@@ -8,12 +8,11 @@ public class CreatePracticeSessionReq : IPacketHandler
 {
     public void Handle(ClientSocket client, ReadOnlySpan<byte> data)
     {
-        int off = 0;
-        int userCount = data.Decode1(ref off);
+        int userCount = data.Decode1();
 
         for (int i = 0; i < userCount; i++)
         {
-            data.Decode1(ref off);
+            data.Decode1();
             var slot = Room.Slots[i];
             slot.User = client.Users[i];
             slot.State = SlotFlags.Chief;

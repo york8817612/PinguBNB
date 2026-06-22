@@ -8,8 +8,7 @@ public class SelectMapReq : IPacketHandler
 {
     public void Handle(ClientSocket client, ReadOnlySpan<byte> data)
     {
-        int off = 0;
-        int map = data.Decode2(ref off);
+        int map = data.Decode2();
         Console.WriteLine($"mapId: {map}");
 
         Room.MapId = map;

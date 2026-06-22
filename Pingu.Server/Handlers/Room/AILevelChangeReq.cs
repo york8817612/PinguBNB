@@ -8,9 +8,8 @@ public class AILevelChangeReq : IPacketHandler
 {
     public void Handle(ClientSocket client, ReadOnlySpan<byte> data)
     {
-        int off = 0;
-        int slotIdx = data.Decode1(ref off);
-        bool increase = data.Decode1(ref off) != 0;
+        int slotIdx = data.Decode1();
+        bool increase = data.Decode1() != 0;
 
         var slot = slotIdx >= 0 && slotIdx < Room.Slots.Length ? Room.Slots[slotIdx] : null;
         if (slot == null || !slot.IsAI) return;

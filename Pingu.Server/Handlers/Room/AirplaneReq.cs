@@ -12,18 +12,17 @@ public class AirplaneReq : IPacketHandler
 
         if (Room.LastAirplaneTime + 7000 > now) return;
 
-        int off = 0;
-        int count = data.Decode1(ref off);
+        int count = data.Decode1();
 
         if (count is >= 1 and <= 3)
         {
             var items = new List<AirplaneItem>();
             for (int i = 0; i < count; i++)
             {
-                int v1 = data.Decode1(ref off);
-                int v2 = data.Decode1(ref off);
-                int v3 = data.Decode1(ref off);
-                int v4 = data.Decode1(ref off);
+                int v1 = data.Decode1();
+                int v2 = data.Decode1();
+                int v3 = data.Decode1();
+                int v4 = data.Decode1();
                 items.Add(new AirplaneItem(v1, v2, v3, v4));
             }
 

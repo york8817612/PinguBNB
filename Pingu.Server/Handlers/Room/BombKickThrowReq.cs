@@ -8,12 +8,11 @@ public class BombKickThrowReq : IPacketHandler
 {
     public void Handle(ClientSocket client, ReadOnlySpan<byte> data)
     {
-        int off = 0;
-        int slotId = data.Decode1(ref off);
-        int bombId = data.Decode2(ref off);
-        data.Decode1(ref off); // fromPos
-        int targetPos = data.Decode1(ref off);
-        int moveDuration = data.Decode2(ref off);
+        int slotId = data.Decode1();
+        int bombId = data.Decode2();
+        data.Decode1(); // fromPos
+        int targetPos = data.Decode1();
+        int moveDuration = data.Decode2();
 
         var bomb = Room.GetBomb(bombId);
         if (bomb != null)

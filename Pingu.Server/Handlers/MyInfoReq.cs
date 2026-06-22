@@ -7,8 +7,7 @@ public class MyInfoReq : IPacketHandler
 {
     public void Handle(ClientSocket client, ReadOnlySpan<byte> data)
     {
-        int off = 0;
-        var player = data.Decode1(ref off);
+        var player = data.Decode1();
 
         _ = client.SendPacketsAsync(new MyInfoResult());
     }

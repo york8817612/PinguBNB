@@ -7,8 +7,7 @@ public class EnterChannelStageReq : IPacketHandler
 {
     public void Handle(ClientSocket client, ReadOnlySpan<byte> data)
     {
-        int off = 0;
-        data.Decode4(ref off);
+        data.Decode4();
 
         _ = client.SendPacketsAsync(
             new ChannelsInfo(),

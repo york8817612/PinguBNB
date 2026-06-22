@@ -161,19 +161,16 @@ public class ClientSocket : IDisposable
 
         pos += payloadLen + Codec.CrcLen;
 
-        int payloadOff = 0;
-        opcode = Codec.CipherDegreeInit == 3
-            ? payloadSpan.Decode2(ref payloadOff)
-            : payloadSpan.Decode1(ref payloadOff);
-
-        payload = payloadSpan.Slice(payloadOff).ToArray();
+        ReadOnlySpan<byte> decodeData = payloadSpan;
+        opcode = Codec.CipherDegreeInit == 3 ? decodeData.Decode2() : decodeData.Decode1();
+        payload = decodeData.ToArray();
 
         RecvSeq += Codec.PacketRcvSeqDelta;
 
-        var remaining = buffer.Length - pos;
-        if (remaining > 0)
-            buffer.GetBuffer().AsSpan(pos, (int)remaining).CopyTo(buffer.GetBuffer());
-        buffer.SetLength(remaining);
+        var remainingBytes = buffer.Length - pos;
+        if (remainingBytes > 0)
+            buffer.GetBuffer().AsSpan(pos, (int)remainingBytes).CopyTo(buffer.GetBuffer());
+        buffer.SetLength(remainingBytes);
         return true;
     }
 
