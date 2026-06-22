@@ -31,9 +31,7 @@ jobs:
         run: dotnet publish -c Release -r win-x64 --self-contained true -p:PublishAot=true -o publish
 
       - name: Create ZIP
-        run: |
-          cd publish
-          zip -r ../release.zip .
+        run: Compress-Archive -Path publish\* -DestinationPath release.zip
 
       - name: Generate version
         id: version
