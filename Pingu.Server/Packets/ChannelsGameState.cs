@@ -6,7 +6,7 @@ public class ChannelsGameState : IPacket
 {
     public void Encode(SendPacketBase buf)
     {
-        int availableSize = 1;
+        int availableSize = ServerConfig.ChannelCount;
         buf.Encode1(availableSize);
         for (int i = 0; i < availableSize; i++)
         {

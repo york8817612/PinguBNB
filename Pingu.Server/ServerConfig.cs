@@ -9,6 +9,7 @@ public static class ServerConfig
 {
     public static Region Locale { get; private set; }
     public static int Ver { get; private set; }
+    public static int ChannelCount { get; private set; } = 5;
     public static Encoding ACP { get; private set; } = Encoding.UTF8;
 
     public static bool IsJP => Locale == Region.JP;
@@ -38,6 +39,9 @@ public static class ServerConfig
             Ver = int.Parse(((YamlScalarNode)root[verKey]!).Value!);
         else
             throw new Exception($"Missing version config for {localeStr} (XX_VER)");
+
+        if (root.Children.ContainsKey(new YamlScalarNode("ChannelCount")))
+            ChannelCount = int.Parse(((YamlScalarNode)root["ChannelCount"]!).Value!);
 
         ACP = Locale switch
         {

@@ -5,24 +5,34 @@ namespace Pingu.Networking;
 
 public static class PinguServer
 {
-    private static readonly int[] TcpPorts = [3838, 4848, 4849];
-    private static readonly int[] UdpPorts = [3839, 4849];
-
     public static async Task StartAsync()
     {
         OpcodeManager.Load();
 
-        var tcpTasks = TcpPorts.Select(StartTcpServerAsync);
-        var udpTasks = UdpPorts.Select(StartUdpServerAsync);
+        var tasks = new List<Task>
+        {
+            StartTcpServerAsync(3838, "Login"),
+            StartUdpServerAsync(3839, "Login"),
+        };
 
-        await Task.WhenAll(tcpTasks.Concat(udpTasks));
+        for (int i = 0; i < ServerConfig.ChannelCount; i++)
+        {
+            int tcpPort = 4848 + i;
+            int udpPort = tcpPort + 1;
+            tasks.Add(StartTcpServerAsync(tcpPort, $"Channel {i}"));
+            tasks.Add(StartUdpServerAsync(udpPort, $"Channel {i}"));
+        }
+
+        tasks.Add(StartTcpServerAsync(4848 + ServerConfig.ChannelCount, "Shop"));
+
+        await Task.WhenAll(tasks);
     }
 
-    private static async Task StartTcpServerAsync(int port)
+    private static async Task StartTcpServerAsync(int port, string label)
     {
         var listener = new TcpListener(IPAddress.Any, port);
         listener.Start(1024);
-        Console.WriteLine($"Bind to TCP port: {port}");
+        Console.WriteLine($"Bind to TCP port: {port} ({label})");
 
         while (true)
         {
@@ -32,10 +42,10 @@ public static class PinguServer
         }
     }
 
-    private static async Task StartUdpServerAsync(int port)
+    private static async Task StartUdpServerAsync(int port, string label)
     {
         var udp = new UdpClient(new IPEndPoint(IPAddress.Any, port));
-        Console.WriteLine($"Bind to UDP port: {port}");
+        Console.WriteLine($"Bind to UDP port: {port} ({label})");
 
         while (true)
         {

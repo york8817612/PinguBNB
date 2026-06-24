@@ -10,8 +10,9 @@ public class OnConnEstablished : IPacketHandler
     public void Handle(ClientSocket client, ReadOnlySpan<byte> data)
     {
         var port = ((IPEndPoint)client.TcpClient.Client.LocalEndPoint!).Port;
-        bool inGameServer = port == 4848;
-        bool inShop = port == 4849;
+        int baseChannelPort = 4848;
+        bool inGameServer = port >= baseChannelPort && port < baseChannelPort + ServerConfig.ChannelCount;
+        bool inShop = port == baseChannelPort + ServerConfig.ChannelCount;
 
         int userCount = data.Decode1();
         if (userCount is >= 1 and <= 2)
