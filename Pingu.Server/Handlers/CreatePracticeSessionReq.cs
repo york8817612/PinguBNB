@@ -10,9 +10,11 @@ public class CreatePracticeSessionReq : IPacketHandler
     {
         int userCount = data.Decode1();
 
-        Room.InitSlots(userCount, client.Users, fillAI: true);
+        var room = ChannelManager.CreateRoom(client.ChannelId, "", "", 0, client);
+        room.InitSlots(userCount, client.Users, true);
+        client.CurrentRoom = room;
 
         _ = client.SendPacketAsync(new CreatePracticeSessionResult());
-        _ = Room.EncodeSlots(client);
+        _ = room.EncodeSlots(client);
     }
 }

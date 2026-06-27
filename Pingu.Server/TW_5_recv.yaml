@@ -10,9 +10,9 @@ EnterChannelStageReq: 9
 ChannelsStateReq: 15
 EstimateRTT: 20
 ChatMsg: 25
-AdminNotifyMsg: 26
-SystemCmd: 27
-Whisper: 28
+#AdminNotifyMsg: 26
+SystemCmd: 26
+Whisper: 27
 SystemMsg: 30
 GuildMarkRevision: 38
 UserSimpleInfoReq: 64

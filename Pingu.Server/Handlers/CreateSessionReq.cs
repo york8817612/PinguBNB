@@ -13,9 +13,11 @@ public class CreateSessionReq : IPacketHandler
         int mode = data.Decode1();
         int userCount = data.Decode1();
 
-        Room.InitSlots(userCount, client.Users);
+        var room = ChannelManager.CreateRoom(client.ChannelId, roomName, pw, mode, client);
+        room.InitSlots(userCount, client.Users);
+        client.CurrentRoom = room;
 
         _ = client.SendPacketAsync(new CreateSessionResult(mode));
-        _ = Room.EncodeSlots(client);
+        _ = room.EncodeSlots(client);
     }
 }

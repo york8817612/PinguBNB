@@ -8,9 +8,12 @@ public class AirplaneReq : IPacketHandler
 {
     public void Handle(ClientSocket client, ReadOnlySpan<byte> data)
     {
+        var room = client.CurrentRoom;
+        if (room == null) return;
+
         long now = Environment.TickCount;
 
-        if (Room.LastAirplaneTime + 7000 > now) return;
+        if (room.LastAirplaneTime + 7000 > now) return;
 
         int count = data.Decode1();
 
@@ -27,9 +30,9 @@ public class AirplaneReq : IPacketHandler
             }
 
             long scheduledTime = now + 2000;
-            Room.LastAirplaneTime = scheduledTime;
+            room.LastAirplaneTime = scheduledTime;
 
-            Room.Broadcast(new Airplane((int)scheduledTime, items));
+            room.Broadcast(new Airplane((int)scheduledTime, items));
         }
     }
 }

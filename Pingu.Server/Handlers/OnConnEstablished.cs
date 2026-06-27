@@ -14,6 +14,11 @@ public class OnConnEstablished : IPacketHandler
         bool inGameServer = port >= baseChannelPort && port < baseChannelPort + ServerConfig.ChannelCount;
         bool inShop = port == baseChannelPort + ServerConfig.ChannelCount;
 
+        if (inGameServer)
+            client.ChannelId = port - baseChannelPort;
+        else if (inShop)
+            client.ChannelId = -2;
+
         int userCount = data.Decode1();
         if (userCount is >= 1 and <= 2)
         {

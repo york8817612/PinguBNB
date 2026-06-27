@@ -13,6 +13,8 @@ public class ClientSocket : IDisposable
     public TcpClient TcpClient { get; }
     public NetworkStream Stream { get; }
     public List<User> Users { get; } = [];
+    public Room? CurrentRoom { get; set; }
+    public int ChannelId { get; set; } = -1;
     public int SendSeq { get; private set; } = 40;
     public int RecvSeq { get; private set; } = 40;
     public int CipherDegree { get; set; } = 0;
@@ -30,6 +32,8 @@ public class ClientSocket : IDisposable
         if (_disposed) return;
         _disposed = true;
         lock (_allClientsLock) _allClients.Remove(this);
+        if (CurrentRoom != null)
+            ChannelManager.RemoveRoom(CurrentRoom);
         TcpClient.Dispose();
         GC.SuppressFinalize(this);
     }

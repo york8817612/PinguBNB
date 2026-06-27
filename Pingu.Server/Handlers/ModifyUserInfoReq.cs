@@ -15,6 +15,8 @@ public class ModifyUserInfoReq : IPacketHandler
         var birthday = data.DecodeStr();
         var open = data.Decode1();
 
-        //_ = client.SendPacketsAsync(new MyInfoResult());
+        
+
+        _ = client.SendPacketsAsync(new ModifyUserInfoResult());
     }
 }

@@ -17,6 +17,7 @@ ChatMessage: 25
 Whisper: 27
 SystemMsg: 30
 MyInfoResult: 64
+ModifyUserInfoResult: 65
 UserSimpleInfo: 70
 CreateSessionResult: 80
 JoinSessionResult: 81

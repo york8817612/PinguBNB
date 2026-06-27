@@ -8,10 +8,13 @@ public class AILevelChangeReq : IPacketHandler
 {
     public void Handle(ClientSocket client, ReadOnlySpan<byte> data)
     {
+        var room = client.CurrentRoom;
+        if (room == null) return;
+
         int slotIdx = data.Decode1();
         bool increase = data.Decode1() != 0;
 
-        var slot = slotIdx >= 0 && slotIdx < Room.Slots.Length ? Room.Slots[slotIdx] : null;
+        var slot = slotIdx >= 0 && slotIdx < room.Slots.Count ? room.Slots[slotIdx] : null;
         if (slot == null || !slot.IsAI) return;
 
         int current = slot.AILevel;
@@ -25,6 +28,6 @@ public class AILevelChangeReq : IPacketHandler
         if (newLevel < 1 || newLevel > 31) return;
 
         slot.AILevel = newLevel;
-        Room.Broadcast(new AILevelChange(slotIdx, newLevel));
+        room.Broadcast(new AILevelChange(slotIdx, newLevel));
     }
 }

@@ -7,6 +7,9 @@ public class BombIgniteReq : IPacketHandler
 {
     public void Handle(ClientSocket client, ReadOnlySpan<byte> data)
     {
+        var room = client.CurrentRoom;
+        if (room == null) return;
+
         int slotId = data.Decode1();
         int unk = ServerConfig.IsJP ? data.Decode1() : 0;
         int pos = data.Decode1();
@@ -15,6 +18,6 @@ public class BombIgniteReq : IPacketHandler
         int power = bombAttr & 0x0F;
         bool isSpecial = ((bombAttr >> 6) & 1) == 1;
 
-        Room.AddBomb(slotId, pos, bombAttr, isSpecial, unk);
+        room.AddBomb(slotId, pos, bombAttr, isSpecial, unk);
     }
 }

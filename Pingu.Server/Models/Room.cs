@@ -3,31 +3,43 @@ using Pingu.Packets.Game;
 
 namespace Pingu.Models;
 
-public static class Room
+public class Room
 {
-    private static int _nextBombId = 0;
-    private static Timer? _tickTimer;
-    private static readonly object _lock = new();
+    private int _nextBombId = 0;
+    private Timer? _tickTimer;
+    private readonly object _lock = new();
 
-    public static Slot[] Slots { get; } = new Slot[8];
-    public static int MapId { get; set; } = 89;
-    public static List<Bomb> Bombs { get; } = [];
-    public static long LastAirplaneTime { get; set; } = 0;
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public string Password { get; set; } = "";
+    public int Mode { get; set; }
+    public bool InGame { get; set; }
+    public int ChannelId { get; set; }
+    public ClientSocket? Host { get; set; }
 
-    public static int ActiveSlotCount => Slots.Count(s => s.User != null || s.IsAI);
+    public List<Slot> Slots { get; } = [];
+    public int MapId { get; set; } = 89;
+    public List<Bomb> Bombs { get; } = [];
+    public long LastAirplaneTime { get; set; } = 0;
 
-    public static IEnumerable<ClientSocket> UniqueClients =>
+    public bool HasPassword => !string.IsNullOrEmpty(Password);
+    public int PlayerCount => ActiveSlotCount;
+    public string HostName => Host?.Users.FirstOrDefault()?.Name ?? "";
+
+    public int ActiveSlotCount => Slots.Count(s => s.User != null || s.IsAI);
+
+    public IEnumerable<ClientSocket> UniqueClients =>
         Slots.Select(s => s.User?.Client)
             .Where(c => c != null)
             .DistinctBy(c => c!.TcpClient.Client.RemoteEndPoint!)!;
 
-    static Room()
+    public Room()
     {
         for (int i = 0; i < 8; i++)
-            Slots[i] = new Slot();
+            Slots.Add(new Slot());
     }
 
-    public static void StartGame()
+    public void StartGame()
     {
         lock (_lock)
         {
@@ -39,17 +51,18 @@ public static class Room
             int random = rng.Next(9999);
 
             Broadcast(
-                new LaunchGameStage(spawnPositions),
+                new LaunchGameStage(this, spawnPositions),
                 new AirplaneItemProb(),
                 new DoStartGame(random)
             );
 
             _tickTimer?.Dispose();
             _tickTimer = new Timer(_ => OnTick(), null, 0, 200);
+            InGame = true;
         }
     }
 
-    private static void OnTick()
+    private void OnTick()
     {
         lock (_lock)
         {
@@ -67,7 +80,7 @@ public static class Room
         }
     }
 
-    public static void AddBomb(int slotId, int pos, int bombAttr, bool isSpecial, int unk)
+    public void AddBomb(int slotId, int pos, int bombAttr, bool isSpecial, int unk)
     {
         lock (_lock)
         {
@@ -79,24 +92,24 @@ public static class Room
         }
     }
 
-    public static Bomb? GetBomb(int bombId) =>
+    public Bomb? GetBomb(int bombId) =>
         Bombs.Find(b => b.Id == bombId);
 
-    public static void Broadcast(params IPacket[] packets)
+    public void Broadcast(params IPacket[] packets)
     {
         foreach (var client in UniqueClients)
             _ = client.SendPacketsAsync(packets);
     }
 
-    public static void Broadcast(IPacket packet)
+    public void Broadcast(IPacket packet)
     {
         foreach (var client in UniqueClients)
             _ = client.SendPacketAsync(packet);
     }
 
-    public static async Task EncodeSlots(ClientSocket c)
+    public async Task EncodeSlots(ClientSocket c)
     {
-        for (int i = 0; i < Slots.Length; i++)
+        for (int i = 0; i < Slots.Count; i++)
         {
             var slot = Slots[i];
             if (slot.User != null)
@@ -106,39 +119,100 @@ public static class Room
         }
     }
 
-    public static void InitSlots(int userCount, IReadOnlyList<User> users, bool fillAI = false)
+    public async Task CloseSlot(ClientSocket c, int slotIdx)
     {
-        for (int i = 0; i < userCount; i++)
-        {
-            var slot = Slots[i];
-            slot.User = users[i];
-            slot.State = SlotFlags.Chief;
-            slot.Bomber = 5;
-            slot.Color = (byte)(fillAI ? 0 : i);
-        }
+        var slot = CloseSlotMeta(slotIdx);
+        await c.SendPacketAsync(new SetSlotState(slotIdx, slot));
+    }
 
-        if (fillAI)
+    public async Task OpenSlot(ClientSocket c, int slotIdx, bool isPractice = false)
+    {
+        Slot slot;
+        if (isPractice)
         {
-            for (int i = 0; i < 6 - userCount; i++)
+            slot = DefaultAIMeta(slotIdx);
+        } 
+        else
+        {
+            slot = EmptySlotMeta(slotIdx);
+        }
+        await c.SendPacketAsync(new SetSlotState(slotIdx, slot));
+    }
+
+    public void InitSlots(int userCount, IReadOnlyList<User> users, bool isPractice = false)
+    {
+        for (int i = 0; i < 8; i++)
+        {
+            if (i < userCount)
             {
-                var slot = Slots[userCount + i];
+                var slot = Slots[i];
+                slot.User = users[i];
+                slot.State = SlotFlags.Chief;
                 slot.Bomber = 5;
-                slot.Color = 7;
-                slot.IsAI = true;
+                slot.Color = (byte)(isPractice ? 0 : i);
+            } 
+            else
+            {
+                if (isPractice)
+                {
+                    if (i < userCount * 2)
+                    {
+                        DefaultAIMeta(i);
+                    }
+                    else
+                    {
+                        CloseSlotMeta(i);
+                    }
+                }
+                else
+                {
+                    EmptySlotMeta(i);
+                }
             }
         }
     }
 
-    public static void EndGame()
+    private Slot DefaultAIMeta(int slotIdx)
+    {
+        var slot = Slots[slotIdx];
+        slot.State = SlotFlags.Ready;
+        slot.Bomber = 5;
+        slot.Color = 7;
+        slot.IsAI = true;
+        return slot;
+    }
+
+    private Slot EmptySlotMeta(int slotIdx)
+    {
+        var slot = Slots[slotIdx];
+        slot.State = SlotFlags.Ready;
+        slot.Bomber = 0;
+        slot.Color = 0;
+        slot.IsAI = false;
+        return slot;
+    }
+
+    private Slot CloseSlotMeta(int slotIdx)
+    {
+        var slot = Slots[slotIdx];
+        slot.State = SlotFlags.Closed;
+        slot.Bomber = 0;
+        slot.Color = 0;
+        slot.IsAI = false;
+        return slot;
+    }
+
+    public void EndGame()
     {
         lock (_lock)
         {
             _tickTimer?.Dispose();
             _tickTimer = null;
+            InGame = false;
         }
     }
 
-    public static void Reset()
+    public void Reset()
     {
         lock (_lock)
         {
@@ -147,6 +221,7 @@ public static class Room
             Bombs.Clear();
             _nextBombId = 0;
             LastAirplaneTime = 0;
+            InGame = false;
         }
     }
 }
